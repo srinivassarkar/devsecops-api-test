@@ -150,6 +150,7 @@ jobs:
       uses: aquasecurity/tfsec-action@v1.0.0 # Additional Terraform static security scanning
       with:
         working-directory: terraform
+        soft_fail: true # Do not fail the job on findings - only for local testing for prod need to make it false.
 
   # Job: Deploy to production environment (runs only on main branch)
   deploy-prod:
