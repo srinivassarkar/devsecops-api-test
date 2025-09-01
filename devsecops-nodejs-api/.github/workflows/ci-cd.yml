@@ -1,0 +1,211 @@
+name: CI/CD Pipeline
+
+# Define events that trigger this workflow
+on:
+  push:
+    branches: [ main, develop ] # Trigger on pushes to main and develop branches
+  pull_request:
+    branches: [ main ] # Trigger on PRs targeting main branch
+  workflow_dispatch:
+    # Allow manual trigger from GitHub Actions UI
+
+    # Environment variables for Docker image management
+env:
+  IMAGE_NAME: wizardxx7/devsecops-api # Docker image name/repo
+  IMAGE_TAG: ${{ github.sha }} # Image tag set to commit SHA for traceability
+  REGISTRY: docker.io # Docker registry
+
+jobs:
+  # Job: Build, unit test, and security scan the application
+  build-and-scan:
+    runs-on: ubuntu-latest # Use latest Ubuntu VM runner
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4 # Check out repository code
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4 # Setup Node.js environment
+      with:
+        node-version: 18 # Use Node.js version 18
+        cache: "npm" # Cache npm dependencies for faster installs
+
+    - name: Install dependencies
+      run: npm ci # Clean install dependencies for reproducibility
+
+    - name: Run unit tests
+      run: npm test -- --ci --reporters=default --reporters=jest-junit # Run tests with CI and JUnit reporters for results aggregation
+
+    - name: Run Semgrep (SAST)
+      uses: returntocorp/semgrep-action@v1 # Static Application Security Testing using Semgrep
+      with:
+        config: "p/ci" # Preset CI ruleset
+        sarif: semgrep.sarif # Output SARIF report format
+      continue-on-error: false # Fail build if any issues found
+
+    - name: Upload Semgrep Results
+      if: always() # Always upload results even if previous step failed
+      uses: actions/upload-artifact@v4
+      with:
+        name: semgrep-report
+        path: semgrep.sarif # Upload Semgrep SARIF report artifact
+
+    - name: Run Trivy FS scan (SCA)
+      uses: aquasecurity/trivy-action@master # Dependency vulnerability scan on filesystem-level packages
+      with:
+        scan-type: fs
+        severity: HIGH,CRITICAL
+        ignore-unfixed: true # Ignore vulnerabilities with no fixes yet
+        exit-code: 1 # Fail if any high or critical vulnerabilities found
+        format: sarif # Output SARIF format report
+        output: trivy-fs.sarif # Save report to file
+
+    - name: Upload Trivy FS Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: trivy-fs-report
+        path: trivy-fs.sarif # Upload Trivy FS SARIF report artifact
+
+    - name: Log in to DockerHub
+      uses: docker/login-action@v2 # Login to Docker Hub for image push
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }} # Use secrets for security
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5 # Build and push Docker image to registry
+      with:
+        push: true
+        tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }},${{ env.IMAGE_NAME }}:latest # Tag with commit SHA and 'latest'
+        context: . # Build context is repo root
+
+    - name: Run Trivy Image scan
+      uses: aquasecurity/trivy-action@master # Scan built Docker image for vulnerabilities
+      with:
+        image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        severity: HIGH,CRITICAL
+        ignore-unfixed: true
+        exit-code: 1
+        format: sarif
+        output: trivy-image.sarif
+
+    - name: Upload Trivy Image Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: trivy-image-report
+        path: trivy-image.sarif # Upload container scan SARIF report
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: junit.xml # Upload unit test results (JUnit format)
+
+  # Job: Deploy to development environment for testing/demo
+  deploy-dev:
+    needs: build-and-scan # Depend on successful build-and-scan job
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Kubectl
+      uses: azure/setup-kubectl@v3 # Install kubectl CLI for Kubernetes cluster interaction
+      with:
+        version: v1.28.0
+
+    - name: Set up Minikube (for demo/test)
+      uses: medyagh/setup-minikube@master # Setup Minikube Kubernetes cluster locally for demonstration/testing
+
+    - name: Deploy manifests
+      run: |
+        kubectl apply -f k8s/namespace.yaml   # Create namespace if it doesn't exist
+        kubectl apply -f k8s/                  # Apply all k8s manifests (deployments, services, etc.)
+
+    - name: Verify rollout
+      run: |
+        kubectl rollout status deployment/devsecops-nodejs-api -n devsecops-app  # Ensure deployment is rolled out successfully
+
+  # Job: Infrastructure as Code (IaC) security scanning
+  iac-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Checkov
+      uses: bridgecrewio/checkov-action@master # Static analysis of Terraform code for security issues
+      with:
+        directory: terraform
+        quiet: true
+        framework: terraform # Limit to Terraform scanning
+
+    - name: Run tfsec
+      uses: aquasecurity/tfsec-action@v1.0.0 # Additional Terraform static security scanning
+      with:
+        working-directory: terraform
+
+  # Job: Deploy to production environment (runs only on main branch)
+  deploy-prod:
+    if: github.ref == 'refs/heads/main' # Restrict deployment to main branch
+    needs: [ build-and-scan, iac-scan ] # Wait for build-and-scan and IaC scan to complete successfully
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v2 # Setup Terraform CLI
+      with:
+        terraform_version: 1.5.7
+
+    - name: Terraform Init
+      run: terraform init # Initialize Terraform working directory
+      working-directory: terraform
+
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan # Generate execution plan and save it for review
+      working-directory: terraform
+    # Uncomment below only if you want CI to apply automatically:
+    # - name: Terraform Apply
+    #   run: terraform apply -auto-approve tfplan
+    #   working-directory: terraform
+
+    # Job: Generate a consolidated security report after scans and deployments
+  security-report:
+    name: Generate Security Report
+    runs-on: ubuntu-latest
+    needs: [ build-and-scan, iac-scan, deploy-dev ]
+    if: always() # Always run to generate report, even if some jobs fail
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate Security Summary
+      run: |
+        echo "# DevSecOps Security Report" > SECURITY_REPORT.md
+        echo "Generated on: $(date)" >> SECURITY_REPORT.md
+        echo "" >> SECURITY_REPORT.md
+        echo "## Security Scans Completed:" >> SECURITY_REPORT.md
+        echo "- ✅ SAST (Semgrep)" >> SECURITY_REPORT.md
+        echo "- ✅ Dependency Scan (Trivy FS)" >> SECURITY_REPORT.md
+        echo "- ✅ Container Security (Trivy Image)" >> SECURITY_REPORT.md
+        echo "- ✅ IaC Security (Checkov + tfsec)" >> SECURITY_REPORT.md
+        echo "" >> SECURITY_REPORT.md
+        echo "## Next Steps:" >> SECURITY_REPORT.md
+        echo "- Review SARIF/JSON reports in GitHub Security tab" >> SECURITY_REPORT.md
+        echo "- Address any critical/high severity findings" >> SECURITY_REPORT.md
+        echo "- Update dependencies regularly" >> SECURITY_REPORT.md      # Suggested best practice
+
+    - name: Upload Security Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-report
+        path: SECURITY_REPORT.md # Upload generated security report as artifact

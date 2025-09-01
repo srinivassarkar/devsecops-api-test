@@ -1,0 +1,134 @@
+# apiVersion: apps/v1
+# kind: DaemonSet
+# metadata:
+#   name: falco
+#   namespace: devsecops-app
+#   labels:
+#     app: falco
+# spec:
+#   selector:
+#     matchLabels:
+#       app: falco
+#   template:
+#     metadata:
+#       labels:
+#         app: falco
+#     spec:
+#       serviceAccountName: devsecops-app-sa
+#       tolerations:
+#       # Allow scheduling on control plane/master nodes if needed
+#       - key: node-role.kubernetes.io/control-plane
+#         operator: Exists
+#         effect: NoSchedule
+#       - key: node-role.kubernetes.io/master
+#         operator: Exists
+#         effect: NoSchedule
+#       containers:
+#       - name: falco
+#         image: falcosecurity/falco:latest
+#         securityContext:
+#           privileged: true # Needed to trace syscalls
+#         resources:
+#           requests:
+#             cpu: 100m
+#             memory: 200Mi
+#           limits:
+#             cpu: 500m
+#             memory: 500Mi
+#         readinessProbe:
+#           exec:
+#             command: [ "falco", "--version" ]
+#           initialDelaySeconds: 10
+#           periodSeconds: 30
+#           failureThreshold: 3
+#         volumeMounts:
+#         - name: dev-fs
+#           mountPath: /host/dev
+#         - name: proc-fs
+#           mountPath: /host/proc
+#           readOnly: true
+#         - name: boot-fs
+#           mountPath: /host/boot
+#           readOnly: true
+#         - name: lib-modules
+#           mountPath: /host/lib/modules
+#           readOnly: true
+#         - name: usr-src
+#           mountPath: /host/usr
+#           readOnly: true
+#         - name: falco-config
+#           mountPath: /etc/falco
+#       terminationGracePeriodSeconds: 30
+#       volumes:
+#       - name: dev-fs
+#         hostPath:
+#           path: /dev
+#       - name: proc-fs
+#         hostPath:
+#           path: /proc
+#       - name: boot-fs
+#         hostPath:
+#           path: /boot
+#       - name: lib-modules
+#         hostPath:
+#           path: /lib/modules
+#       - name: usr-src
+#         hostPath:
+#           path: /usr
+#       - name: falco-config
+#         configMap:
+#           name: falco-config
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falco
+  namespace: kube-system #devsecops-app
+  labels:
+    app: falco
+spec:
+  selector:
+    matchLabels:
+      app: falco
+  template:
+    metadata:
+      labels:
+        app: falco
+    spec:
+      #serviceAccountName: devsecops-app-sa
+      containers:
+      - name: falco
+        image: falcosecurity/falco:latest
+        securityContext:
+          privileged: true
+          runAsNonRoot: false
+          allowPrivilegeEscalation: true
+          capabilities:
+            add: [ "SYS_PTRACE", "NET_ADMIN", "SYS_ADMIN" ]
+        volumeMounts:
+        - mountPath: /host/dev
+          name: dev-fs
+        - mountPath: /host/proc
+          name: proc-fs
+        - mountPath: /host/boot
+          name: boot-fs
+        - mountPath: /host/lib/modules
+          name: lib-modules
+        - mountPath: /host/usr
+          name: usr-src
+      volumes:
+      - name: dev-fs
+        hostPath:
+          path: /dev
+      - name: proc-fs
+        hostPath:
+          path: /proc
+      - name: boot-fs
+        hostPath:
+          path: /boot
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: usr-src
+        hostPath:
+          path: /usr/src

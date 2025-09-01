@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-config
+  namespace: kube-system #devsecops-app
+data:
+  falco.yaml: |
+    rules_file:
+      - /etc/falco/falco_rules.yaml
+      - /etc/falco/falco_rules.local.yaml
+      - /etc/falco/k8s_audit_rules.yaml
+      - /etc/falco/rules.d
+
+    json_output: true
+    json_include_output_property: true
+    json_include_tags_property: true
+
+    log_stderr: true
+    log_syslog: true
+    log_level: info
+    priority: info
+
+    file_output:
+      enabled: true
+      keep_alive: false
+      filename: /var/log/falco_events.txt
+
+    program_output:
+      enabled: false
+      keep_alive: false
+      program: "curl -X POST http://webhook-server:8080/alerts"
+
+    http_output:
+      enabled: false
+      url: "http://webhook-server:8080/falco-alerts"
+      user_agent: "falcosecurity/falco"
+
+    grpc_output:
+      enabled: false
+      address: "unix:///var/run/falco/falco.sock"
+      threadiness: 0
+
+    stdout_output:
+      enabled: true
+
+    syscall_event_drops:
+      actions:
+        - log
+        - alert
+      rate: 0.03333
+      max_burst: 1000
+
+    syscall_event_timeouts:
+      max_consecutives: 1000
+
+    outputs:
+      rate: 1
+      max_burst: 1000
+
+    grpc:
+      enabled: false
+      bind_address: "0.0.0.0:5060"
+      threadiness: 0
+      private_key: "/etc/falco/certs/server.key"
+      cert_chain: "/etc/falco/certs/server.crt"
+      root_certs: "/etc/falco/certs/ca.crt"
+
+    webserver:
+      enabled: true
+      listen_port: 8765
+      k8s_healthz_endpoint: /healthz
+      ssl_enabled: false
+      ssl_certificate: /etc/falco/falco.pem
+
+    base_syscalls:
+      custom_set: []
+      repair: false
+
+    modern_bpf:
+      cpus_for_each_syscall_buffer: 2
+
+    buffered_outputs: false
+
+    container_engines:
+      docker:
+        socket_path: /var/run/docker.sock
+      containerd:
+        socket_path: /var/run/containerd/containerd.sock
+      crio:
+        socket_path: /var/run/crio/crio.sock
+
+    metadata_download:
+      max_mb: 100
+      chunk_wait_us: 1000
+      watch_freq_sec: 1
+
+    application:
+      log_level: info
+      name: "DevSecOps Falco"
+
+    performance:
+      syscall_buffer_size_bytes: 8388608
+      syscall_buffers_num: 64
+      sampling_ratio: 1
+      drops_alerts: true
+      drops_rate_threshold: 0.1
+      drops_max_burst: 1000
+
+  falco_rules.local.yaml: |
+    # Custom Falco Rules for DevSecOps Application Security
+
+    # Rule: Detect privilege escalation attempts
+    - rule: Privilege Escalation Detected
+      desc: Detect attempts to escalate privileges
+      condition: >
+        spawned_process and (proc.name in (sudo, su, pkexec)) and not proc.pname in (sshd, sudo, su, runuser)
+      output: >
+        Privilege escalation attempt detected (command=%proc.cmdline user=%user.name container=%container.name image=%container.image.repository:%container.image.tag)
+      priority: CRITICAL
+      tags: [ container, privilege_escalation ]
+
+    # Rule: Detect sensitive file access
+    - rule: Read Sensitive Files
+      desc: Detect reads of sensitive files
+      condition: >
+        open_read and sensitive_files and not proc.name in (systemd, dbus, networkd-dispat) and not container.image.repository in (prom/prometheus, redis, traefik)
+      output: >
+        Sensitive file read (file=%fd.name command=%proc.cmdline user=%user.name container=%container.name image=%container.image.repository:%container.image.tag)
+      priority: WARNING
+      tags: [ filesystem, sensitive_data ]
+
+    # ... and so on for the rest of the rules with correct consistent indentation and no leading '---'

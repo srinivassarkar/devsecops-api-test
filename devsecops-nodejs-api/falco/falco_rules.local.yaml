@@ -1,0 +1,173 @@
+# Custom Falco Rules for DevSecOps Application Security
+---
+# Rule: Detect privilege escalation attempts
+- rule: Privilege Escalation Detected
+  desc: Detect attempts to escalate privileges
+  condition: >
+    spawned_process and 
+    (proc.name in (sudo, su, pkexec)) and 
+    not proc.pname in (sshd, sudo, su, runuser)
+  output: >
+    Privilege escalation attempt detected (command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: CRITICAL
+  tags: [container, privilege_escalation]
+
+# Rule: Detect sensitive file access
+- rule: Read Sensitive Files
+  desc: Detect reads of sensitive files
+  condition: >
+    open_read and sensitive_files and 
+    not proc.name in (systemd, dbus, networkd-dispat) and
+    not container.image.repository in (prom/prometheus, redis, traefik)
+  output: >
+    Sensitive file read (file=%fd.name command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: WARNING
+  tags: [filesystem, sensitive_data]
+
+# Rule: Detect network connections to suspicious IPs
+- rule: Outbound Connection to Suspicious IP
+  desc: Detect outbound connections to suspicious IP ranges
+  condition: >
+    outbound and not fd.typechar=4 and not fd.is_unix_socket and
+    not proc.name in (systemd-resolve, systemd-network) and
+    (fd.sip.name startswith "192.168.1.1" or
+     fd.sip.name startswith "10.0.0.1" or  
+     fd.sip.name startswith "172.16.0.1")
+  output: >
+    Suspicious outbound connection (connection=%fd.name command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: NOTICE
+  tags: [network, suspicious]
+
+# Rule: Detect shell spawned in container
+- rule: Shell Spawned in Container
+  desc: Detect shell process spawned in container
+  condition: >
+    spawned_process and container and 
+    proc.name in (bash, sh, zsh, fish, csh, ksh, ash, dash) and
+    not proc.pname in (docker, containerd, dockerd, systemd)
+  output: >
+    Shell spawned in container (command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: WARNING
+  tags: [container, shell]
+
+# Rule: Detect file modification in /etc
+- rule: Write to /etc Directory
+  desc: Detect writes to system configuration directory
+  condition: >
+    open_write and fd.name startswith /etc and
+    not proc.name in (systemd, dbus, networkd-dispat, dockerd, containerd) and
+    not container.image.repository in (redis, traefik, falcosecurity/falco-no-driver)
+  output: >
+    Write to /etc directory (file=%fd.name command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: ERROR
+  tags: [filesystem, configuration]
+
+# Rule: Detect suspicious network tool usage
+- rule: Network Tool Usage in Container
+  desc: Detect usage of network tools in containers
+  condition: >
+    spawned_process and container and 
+    proc.name in (nc, ncat, netcat, nmap, tcpdump, wireshark, tshark)
+  output: >
+    Network tool used in container (command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: WARNING
+  tags: [container, network, tools]
+
+# Rule: Detect package management in containers
+- rule: Package Management in Container
+  desc: Detect package installation/removal in running containers
+  condition: >
+    spawned_process and container and 
+    proc.name in (apt, apt-get, yum, rpm, dpkg, pip, npm, yarn, apk)
+  output: >
+    Package management activity in container (command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: WARNING
+  tags: [container, package_management]
+
+# Rule: Detect cryptocurrency mining
+- rule: Cryptocurrency Mining
+  desc: Detect cryptocurrency mining activity
+  condition: >
+    spawned_process and 
+    (proc.name contains "miner" or proc.name contains "xmrig" or 
+     proc.name contains "cpuminer" or proc.cmdline contains "stratum" or
+     proc.cmdline contains "cryptonight" or proc.cmdline contains "monero")
+  output: >
+    Cryptocurrency mining detected (command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: CRITICAL
+  tags: [malware, cryptocurrency]
+
+# Rule: Detect container escape attempts
+- rule: Container Escape Attempt
+  desc: Detect potential container escape attempts
+  condition: >
+    spawned_process and container and 
+    (proc.cmdline contains "docker.sock" or
+     proc.cmdline contains "/var/run/docker" or
+     proc.cmdline contains "runc" or
+     proc.cmdline contains "nsenter")
+  output: >
+    Container escape attempt detected (command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: CRITICAL
+  tags: [container, escape]
+
+# Rule: Detect reverse shell attempts
+- rule: Reverse Shell Detected
+  desc: Detect reverse shell connections
+  condition: >
+    spawned_process and 
+    ((proc.name in (nc, ncat, netcat) and proc.cmdline contains " -e") or
+     (proc.name in (bash, sh) and proc.cmdline contains "/dev/tcp/") or
+     (proc.cmdline contains "bash -i" and proc.cmdline contains "&")) and
+    not container.image.repository in (falcosecurity/falco-no-driver)
+  output: >
+    Reverse shell detected (command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: CRITICAL
+  tags: [network, reverse_shell]
+
+# Rule: Detect unexpected outbound DNS queries
+- rule: Unexpected DNS Query
+  desc: Detect DNS queries to unexpected domains
+  condition: >
+    outbound and fd.sport=53 and 
+    not proc.name in (systemd-resolve, dnsmasq, unbound, named) and
+    (fd.sip.name contains ".tk" or fd.sip.name contains ".ml" or 
+     fd.sip.name contains ".ga" or fd.sip.name contains ".cf" or
+     fd.sip.name contains "pastebin" or fd.sip.name contains "discord")
+  output: >
+    Unexpected DNS query (query=%fd.name command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: WARNING
+  tags: [network, dns, suspicious]
+
+# Custom macros for our application
+- macro: devsecops_containers
+  condition: >
+    container.image.repository in (wizardxx7/devsecops-api)
+
+- macro: allowed_binaries
+  condition: >
+    proc.name in (node, npm, dumb-init)
+
+# Application-specific rule
+- rule: Unexpected Process in DevSecOps Container
+  desc: Detect unexpected processes in our application containers
+  condition: >
+    spawned_process and devsecops_containers and 
+    not allowed_binaries and
+    not proc.pname in (dumb-init, node)
+  output: >
+    Unexpected process in DevSecOps container (command=%proc.cmdline user=%user.name 
+    container=%container.name image=%container.image.repository:%container.image.tag)
+  priority: ERROR
+  tags: [container, application, unexpected_process]

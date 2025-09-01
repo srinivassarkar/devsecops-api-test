@@ -1,0 +1,65 @@
+schemaVersion: "2.0.0"
+
+# File existence tests
+fileExistenceTests:
+  - name: "app.js exists"
+    path: "/app/app.js"
+    shouldExist: true
+  - name: "package.json exists"
+    path: "/app/package.json"
+    shouldExist: true
+  - name: "node_modules exists"
+    path: "/app/node_modules"
+    shouldExist: true
+
+# File content tests
+fileContentTests:
+  - name: "Non-root user in passwd"
+    path: "/etc/passwd"
+    expectedContents:
+      - "nodejs:x:1001:1001::/home/nodejs:/bin/sh"
+  - name: "Check NODE_ENV is production"
+    path: "/proc/1/environ"
+    expectedContents:
+      - "NODE_ENV=production"
+
+# Command tests
+commandTests:
+  - name: "node version"
+    command: "node"
+    args: ["--version"]
+    expectedOutput:
+      - "v18.*"
+  - name: "npm is available"
+    command: "npm"
+    args: ["--version"]
+    exitCode: 0
+  - name: "check application starts"
+    command: "timeout"
+    args: ["5s", "node", "/app/app.js"]
+    exitCode: 124 # timeout exit code
+
+# Metadata tests
+metadataTest:
+  labels:
+    - key: "maintainer"
+      value: "devsecops@example.com"
+    - key: "version"
+      value: "1.0.0"
+    - key: "description"
+      value: "Secure Node.js API for DevSecOps demonstration"
+  exposedPorts: ["3000"]
+  env:
+    - key: "NODE_ENV"
+      value: "production"
+    - key: "PORT"
+      value: "3000"
+  user: "nodejs"
+  workdir: "/app"
+  entrypoint: ["dumb-init", "--"]
+  cmd: ["node", "app.js"]
+
+# License tests
+licenseTests:
+  - debian: true
+    files: []

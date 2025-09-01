@@ -1,0 +1,41 @@
+{
+  "name": "devsecops-nodejs-api",
+  "version": "1.0.0",
+  "description": "A secure Node.js API for DevSecOps demonstration",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "security:audit": "npm audit",
+    "security:sast": "semgrep --config=auto .",
+    "security:dependency": "npm audit --audit-level high"
+  },
+  "keywords": [
+    "nodejs",
+    "api",
+    "devsecops",
+    "security",
+    "express"
+  ],
+  "author": "DevSecOps Engineer",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "helmet": "^7.0.0",
+    "express-rate-limit": "^6.8.1",
+    "morgan": "^1.10.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "jest": "^29.6.1",
+    "supertest": "^6.3.3",
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}

@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devsecops-app-sa
+  namespace: devsecops-app
+  labels:
+    app: devsecops-nodejs-api
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devsecops-app-role
+  namespace: devsecops-app
+  labels:
+    app: devsecops-nodejs-api
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+    resourceNames: ["devsecops-app-config"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: ["devsecops-app-secrets"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devsecops-app-rolebinding
+  namespace: devsecops-app
+  labels:
+    app: devsecops-nodejs-api
+subjects:
+  - kind: ServiceAccount
+    name: devsecops-app-sa
+    namespace: devsecops-app
+roleRef:
+  kind: Role
+  name: devsecops-app-role
+  apiGroup: rbac.authorization.k8s.io

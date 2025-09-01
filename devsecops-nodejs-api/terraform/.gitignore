@@ -1,0 +1,39 @@
+# Ignore the .terraform directory where modules, provider plugins, and other
+# downloaded data is stored. This directory should be generated locally.
+.terraform/
+
+# Ignore the Terraform state file and its backups, which often contain
+# sensitive information and are constantly changing.
+*.tfstate
+*.tfstate.*
+
+# Ignore Terraform CLI configuration files.
+.terraformrc
+terraform.rc
+
+# Ignore Terraform crash log files.
+crash.log
+crash.*.log
+
+# Ignore auto-generated variable files containing sensitive data.
+# This ensures that you don't accidentally commit secrets.
+*.auto.tfvars
+*.auto.tfvars.json
+
+# Exclude override files, which are often used for temporary local testing.
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ignore Terraform plan files, as they contain a snapshot of your infrastructure and
+# are generated locally. You might name these differently.
+*.tfplan
+
+# Ignore files containing sensitive data that should never be committed.
+# Use a secrets management tool instead.
+*.pem
+*.key
+*.pub
+*.p12
+*.json # Use this with caution, or be more specific about the JSON files to ignore.
