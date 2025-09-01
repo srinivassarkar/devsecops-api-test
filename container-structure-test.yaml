@@ -62,4 +62,5 @@ metadataTest:
 # License tests
 licenseTests:
   - debian: true
-    files: []
+    files:
+      - "/app/package.json"
