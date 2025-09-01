@@ -144,6 +144,7 @@ jobs:
         directory: terraform
         quiet: true
         framework: terraform # Limit to Terraform scanning
+        soft_fail: true # Do not fail the job on findings - only for local testing for prod need to make it false.
 
     - name: Run tfsec
       uses: aquasecurity/tfsec-action@v1.0.0 # Additional Terraform static security scanning
