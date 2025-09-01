@@ -15,7 +15,6 @@ RUN addgroup -g 1001 -S nodejs \
 # ============================================
 FROM base AS deps
 
-# Set working directory
 WORKDIR /app
 
 # Copy package files
@@ -26,19 +25,18 @@ RUN npm ci --only=production --no-audit --no-fund \
     && npm cache clean --force
 
 # ============================================
-# Build stage (if needed for compilation)
+# Build stage (for tests / compilation)
 # ============================================
 FROM base AS build
 
 WORKDIR /app
 
-# Copy package files
 COPY --chown=nodejs:nodejs package*.json ./
 
 # Install all dependencies (including dev for testing)
 RUN npm ci --no-audit --no-fund
 
-# Copy source code
+# Copy full source code
 COPY --chown=nodejs:nodejs . .
 
 # Run tests
@@ -49,40 +47,30 @@ RUN npm test
 # ============================================
 FROM base AS production
 
-# Set NODE_ENV
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV APP_VERSION=1.0.0
 
-# Set working directory
 WORKDIR /app
 
 # Copy production dependencies from deps stage
 COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
 
-# Copy application code
-COPY --chown=nodejs:nodejs app.js ./
+# Copy application code (both entrypoints)
+COPY --chown=nodejs:nodejs app.js server.js package.json ./
 
-# Create package.json with only production info
-COPY --chown=nodejs:nodejs package.json ./
-
-# Switch to non-root user
 USER nodejs
 
-# Expose port (non-privileged port)
 EXPOSE 3000
 
-# Add health check
+# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Run the application
-CMD ["node", "app.js"]
+CMD ["node", "server.js"]
 
-# Add metadata labels
 LABEL maintainer="devsecops@example.com"
 LABEL version="1.0.0"
 LABEL description="Secure Node.js API for DevSecOps demonstration"
