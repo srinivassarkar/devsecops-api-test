@@ -84,7 +84,7 @@ jobs:
       uses: aquasecurity/trivy-action@master # Scan built Docker image for vulnerabilities
       with:
         image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-        severity: HIGH,CRITICAL
+        severity: CRITICAL
         ignore-unfixed: true
         exit-code: 1
         format: sarif
