@@ -1,6 +1,14 @@
 const request = require("supertest");
 const app = require("./app");
 
+let server;
+beforeAll(() => {
+  server = app.listen(4000); // test port
+});
+afterAll((done) => {
+  server.close(done);
+});
+
 describe("API Endpoints", () => {
   describe("GET /health", () => {
     it("should return health status", async () => {
