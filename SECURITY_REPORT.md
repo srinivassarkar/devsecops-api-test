@@ -104,17 +104,6 @@ This report provides a comprehensive security analysis of the DevSecOps Node.js 
 
 ### 1.4 Runtime Security
 
-#### Policy Enforcement (OPA Gatekeeper)
-- **Active Policies**: 5 constraint templates
-  1. RequireSecurityContext
-  2. DisallowPrivileged  
-  3. RequireResourceLimits
-  4. DisallowRoot
-  5. RequireNetworkPolicy
-
-- **Policy Compliance**: 100% ✅
-- **Violations Blocked**: 12 attempted, all prevented
-
 #### Runtime Monitoring (Falco)
 - **Monitoring Scope**: Container, process, network, file system
 - **Custom Rules**: 12 application-specific rules
@@ -334,6 +323,3 @@ This security implementation serves as an excellent foundation for scaling secur
 
 ---
 
-**Report Prepared By**: DevSecOps Security Team  
-**Next Review Date**: November 30, 2025  
-**Distribution**: Security Team, Engineering Leadership, Compliance Officer
